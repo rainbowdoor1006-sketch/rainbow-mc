@@ -1,0 +1,33 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 构建产物
+app/out/
+app/dist/
+app/release/
+app/*.tsbuildinfo
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+
+# 本地临时
+_tmp_*
+*.zip
+*.exe
+
+# 记忆/流水（内部文件，不对外）
+_修改记录.md
+_项目记忆.md
+_踩坑记录.md
+_备份/
+# 宣传素材与导出（体积大，不入库）
+_promo/frames/
+_promo/shots/
+_promo/*.mp4
+_promo/发布草稿/
+_export/
