@@ -1,0 +1,85 @@
+{
+  "name": "rainbow-mc",
+  "version": "0.2.49",
+  "description": "RAINBOW MC - 开源 Minecraft 启动器（Electron + React）",
+  "main": "out/main/index.js",
+  "author": "RAINBOW DOOR",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "dist": "electron-vite build && electron-builder --win portable --x64",
+    "dist:dir": "electron-vite build && electron-builder --win --dir"
+  },
+  "dependencies": {
+    "adm-zip": "^0.6.1"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.17",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.rainbowmc.launcher",
+    "icon": "build/icon.ico",
+    "productName": "RAINBOW MC",
+    "copyright": "RAINBOW DOOR",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "RAINBOWMC-${version}-setup.${ext}",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "RAINBOW MC",
+      "menuCategory": false,
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "installerLanguages": [
+        "zh_TW",
+        "zh_CN",
+        "en_US"
+      ],
+      "multiLanguageInstaller": true,
+      "language": "1028",
+      "include": "build/installer.nsh",
+      "artifactName": "RAINBOWMC-${version}-setup.${ext}"
+    },
+    "portable": {
+      "requestExecutionLevel": "user",
+      "artifactName": "RAINBOWMC-${version}-portable.${ext}"
+    }
+  }
+}
