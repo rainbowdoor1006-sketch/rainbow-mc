@@ -1,0 +1,38 @@
+﻿RAINBOW MC Launcher - Software License and Project Notice
+Copyright (c) 2026 RAINBOW DOOR
+================================================================
+
+1. Non-Profit Statement
+   This software is a non-profit project.
+   It is provided free of charge to all Minecraft players, with no fees,
+   no advertising and no paid unlockable content.
+
+2. Open Source
+3. No Commercial Use
+   No third party may modify, repackage, reskin or rename this software
+   for commercial purposes, including but not limited to:
+     - Selling this software or any modified version of it
+     - Injecting advertisements, paid features or bundled promotions
+     - Charging "membership", "acceleration" or "sponsorship" fees
+       under this software's name
+     - Integrating this software into any paid product or service
+   Personal study, research and non-profit distribution are permitted,
+   provided this notice is reproduced in full together with the copyright
+   information and a clear credit to RAINBOW DOOR.
+
+4. Disclaimer
+   This software is provided "AS IS", without warranty of any kind. The
+   authors accept no liability for any direct or indirect loss arising
+   from the use of this software. Minecraft is a trademark of Mojang
+   Studios. This software is not affiliated with Mojang or Microsoft.
+
+6. Data Safety
+   All game data (saves, mods, resource library, game versions) is stored
+   in the "data\" folder inside the installation directory you choose.
+   Installing, upgrading and uninstalling this software never deletes that
+   folder. Do not delete it manually, and consider making regular backups.
+
+7. Confirmation
+   By clicking "I Agree" you confirm that you have read, understood and
+   accepted all of the terms above. If you do not agree, click "Cancel"
+   to exit the installation.
