@@ -155,6 +155,31 @@ const api = {
       return () => ipcRenderer.removeListener('loader:progress', handler)
     }
   },
+  net: {
+    check: (withSpeed?: boolean): Promise<{ ok: boolean; report?: unknown; message?: string }> =>
+      ipcRenderer.invoke('net:check', withSpeed),
+    speed: (): Promise<{ ok: boolean; speed?: unknown; message?: string }> => ipcRenderer.invoke('net:speed'),
+    isAdmin: (): Promise<{ ok: boolean; admin: boolean }> => ipcRenderer.invoke('net:isAdmin'),
+    optState: (): Promise<{ ok: boolean; options?: unknown[]; message?: string }> =>
+      ipcRenderer.invoke('net:optState'),
+    optApply: (ids: string[]): Promise<{ ok: boolean; result?: unknown; message?: string }> =>
+      ipcRenderer.invoke('net:optApply', ids),
+    optRevert: (ids: string[]): Promise<{ ok: boolean; result?: unknown; message?: string }> =>
+      ipcRenderer.invoke('net:optRevert', ids),
+    makeScripts: (ids: string[]): Promise<{
+      ok: boolean
+      applyPath?: string
+      revertPath?: string
+      message?: string
+    }> => ipcRenderer.invoke('net:makeScripts', ids),
+    relaunchAdmin: (): Promise<{
+      ok: boolean
+      uacShown?: boolean
+      adminStarted?: boolean
+      blocked?: boolean
+      message?: string
+    }> => ipcRenderer.invoke('net:relaunchAdmin')
+  },
   console: {
     list: (): Promise<{ name: string; group: string; usage: string; desc: string }[]> =>
       ipcRenderer.invoke('console:list'),

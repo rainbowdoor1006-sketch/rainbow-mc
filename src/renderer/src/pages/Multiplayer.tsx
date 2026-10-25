@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { NetCard } from '@/components/NetCard'
 import { useI18n } from '@/i18n'
 
 interface MpStatus {
@@ -125,6 +126,8 @@ export function Multiplayer({ playerName }: { playerName: string }): React.React
       </div>
 
       {/* 状态卡：当前状态 + 成员 */}
+      <NetCard />
+
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-title">{t('mp.state')}</div>
         <div className="row-between">

@@ -15,7 +15,16 @@ import { downloadCfFiles } from './cf'
 import * as mp from './multiplayer'
 import { estimateProject } from './estimate'
 import { projectSummary } from './stats'
+import { checkNetwork, speedTest } from './netcheck'
 import { checkMods } from './modcheck'
+import {
+  detect as detectNetOpt,
+  apply as applyNetOpt,
+  revert as revertNetOpt,
+  isElevated,
+  relaunchElevated,
+  writeOptimizeScripts
+} from './netopt'
 import { buildFeedbackZip } from './feedback'
 import { initTray } from './tray'
 import { runCommand, listCommands } from './console'
@@ -459,7 +468,41 @@ export function registerMinecraftIpc(getWindow: () => BrowserWindow | null): voi
     }
   })
 
-    /* ---------- 联机（Terracotta） ---------- */
+    ipcMain.handle('net:isAdmin', () => {
+    try {
+      return { ok: true, admin: isElevated() }
+    } catch {
+      return { ok: true, admin: false }
+    }
+  })
+  ipcMain.handle('net:relaunchAdmin', async () => {
+    // 是否弹窗由界面决定：UAC 已弹出就不打扰；被拦截时界面弹提示框
+    return await relaunchElevated()
+  })
+
+  ipcMain.handle('net:optState', () => {
+    try {
+      return { ok: true, options: detectNetOpt() }
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : String(e) }
+    }
+  })
+  ipcMain.handle('net:optApply', (_e, ids: string[]) => {
+    try {
+      return { ok: true, result: applyNetOpt(ids as never) }
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : String(e) }
+    }
+  })
+  ipcMain.handle('net:optRevert', (_e, ids: string[]) => {
+    try {
+      return { ok: true, result: revertNetOpt(ids as never) }
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : String(e) }
+    }
+  })
+
+  /* ---------- 联机（Terracotta） ---------- */
   ipcMain.handle('mp:status', () => mp.currentStatus())
   ipcMain.handle('mp:binary', () => mp.binaryInfo())
   ipcMain.handle('mp:install', async () => {

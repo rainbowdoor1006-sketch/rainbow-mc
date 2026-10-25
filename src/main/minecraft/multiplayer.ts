@@ -1,7 +1,7 @@
-import { spawn, type ChildProcess } from 'child_process'
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'fs'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import { paths } from '../paths'
 
 /**
@@ -155,6 +155,7 @@ export async function ensureTerracotta(onProgress?: (msg: string, pct?: number) 
 /* ───────────── 运行时：进程 + HTTP 控制 ───────────── */
 
 let child: ChildProcess | null = null
+let proxyBackup = ''
 let port = 0
 let meta: { version?: string; easytier_version?: string } = {}
 let timer: NodeJS.Timeout | null = null
@@ -226,6 +227,74 @@ async function poll(): Promise<void> {
   }
 }
 
+
+/* ─────────── 默认开启的小优化（全部不需要管理员权限） ─────────── */
+
+/** 把本机/局域网/P2P 域名加进系统代理例外（HKCU，普通用户可写），返回是否改动 */
+function ensureProxyBypass(): { changed: boolean; backup?: string } {
+  try {
+    const key = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'
+    const read = (): string => {
+      const out = execFileSync('reg', ['query', key, '/v', 'ProxyOverride'], { encoding: 'utf8', windowsHide: true })
+      const m = out.match(/ProxyOverride\s+REG_SZ\s+(.*)/)
+      return m ? m[1].trim() : ''
+    }
+    const cur = read()
+    const wanted = ['<local>', '127.0.0.1', 'localhost', '192.168.*', '10.*', '172.16.*', '*.easytier.top', '*.easytier.cn']
+    const have = new Set(cur.split(';').map((x) => x.trim()).filter(Boolean))
+    const add = wanted.filter((w) => !have.has(w))
+    if (!add.length) return { changed: false }
+    const next = [...have, ...add].join(';')
+    execFileSync('reg', ['add', key, '/v', 'ProxyOverride', '/t', 'REG_SZ', '/d', next, '/f'], {
+      windowsHide: true
+    })
+    return { changed: true, backup: cur }
+  } catch {
+    return { changed: false }
+  }
+}
+
+/** 把陶瓦进程设为「高」优先级（自己的子进程，无需管理员） */
+function boostPriority(pid: number): void {
+  try {
+    execFileSync(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${pid} -ErrorAction SilentlyContinue).PriorityClass='High'`],
+      { windowsHide: true, timeout: 5000 }
+    )
+  } catch {
+    /* 提升失败不影响联机 */
+  }
+}
+
+/** 杀掉落单的陶瓦进程（只杀我们自己目录里的），并删掉过期的端口文件 */
+function cleanupStale(): void {
+  try {
+    const r = execFileSync('wmic', ['process', 'where', "name like '%terracotta%'", 'get', 'ProcessId,ExecutablePath', '/format:csv'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 8000
+    })
+    const ours = dirname(exePath()).toLowerCase()
+    for (const line of r.split(/\r?\n/)) {
+      const cols = line.split(',')
+      if (cols.length < 3) continue
+      const exe = (cols[1] || '').toLowerCase()
+      const pid = Number(cols[2])
+      if (!pid || Number.isNaN(pid)) continue
+      if (exe.includes('terracotta') && exe.includes(ours)) {
+        try {
+          execFileSync('taskkill', ['/PID', String(pid), '/F'], { windowsHide: true, timeout: 5000 })
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  } catch {
+    /* wmic 不可用就算了 */
+  }
+}
+
 /** 启动 Terracotta 服务（已运行则直接复用） */
 export async function start(): Promise<{ ok: boolean; message?: string }> {
   if (port) return { ok: true }
@@ -234,6 +303,10 @@ export async function start(): Promise<{ ok: boolean; message?: string }> {
     if (!r.ok) return r
   }
   mkdirSync(join(paths.root(), 'tools', 'terracotta'), { recursive: true })
+  // 默认开启的两项优化（不需要管理员、不需要用户勾选）
+  cleanupStale()
+  const px = ensureProxyBypass()
+  if (px.changed) proxyBackup = px.backup ?? ''
   const pf = portFile()
   try {
     rmSync(pf, { force: true })
@@ -249,6 +322,25 @@ export async function start(): Promise<{ ok: boolean; message?: string }> {
   child.on('exit', () => {
     child = null
   })
+  if (child.pid) {
+    boostPriority(child.pid)
+    // --hmcl 会 fork 出真正的服务进程，隔一会儿把它也提上来
+    setTimeout(() => {
+      try {
+            const out = execFileSync('wmic', ['process', 'where', "name like '%terracotta%'", 'get', 'ProcessId', '/format:csv'], {
+          encoding: 'utf8',
+          windowsHide: true,
+          timeout: 5000
+        })
+        for (const line of out.split(/\r?\n/)) {
+          const pid = Number(line.split(',')[1])
+          if (pid && !Number.isNaN(pid)) boostPriority(pid)
+        }
+      } catch {
+        /* ignore */
+      }
+    }, 2500)
+  }
 
   // 等待端口文件（最多 12 秒）
   const deadline = Date.now() + 12000
@@ -308,6 +400,29 @@ export async function idle(): Promise<void> {
 
 /** 完全停止服务（启动器退出时调用） */
 export async function stop(): Promise<void> {
+  // 恢复代理例外（只在我们改过的时候）
+  if (proxyBackup) {
+    try {
+        execFileSync(
+        'reg',
+        [
+          'add',
+          'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings',
+          '/v',
+          'ProxyOverride',
+          '/t',
+          'REG_SZ',
+          '/d',
+          proxyBackup,
+          '/f'
+        ],
+        { windowsHide: true }
+      )
+    } catch {
+      /* ignore */
+    }
+    proxyBackup = ''
+  }
   if (timer) {
     clearInterval(timer)
     timer = null
