@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="docs/images/main-window.png" alt="RAINBOW MC 主界面" width="100%">
+</p>
 # RAINBOW MC 启动器
 
 一款开源 Minecraft 启动器（Windows）。
