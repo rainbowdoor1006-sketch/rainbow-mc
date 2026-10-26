@@ -5,19 +5,27 @@ import { runtimeDir } from './paths'
 import { downloadOne, ensureDir } from './http'
 
 interface AdoptiumAsset {
-  binary: { package: { link: string; name: string; size: number } }
+  binary: { package: { link: string; name: string; size: number; checksum?: string } }
   release_name: string
 }
 
 /** 按大版本号取 JRE 的下载地址（Adoptium / Eclipse Temurin） */
-async function adoptiumUrl(major: number): Promise<{ url: string; name: string }> {
+function sha256FileSync(file: string): string {
+  const fs = require('fs') as typeof import('fs')
+  const crypto = require('crypto') as typeof import('crypto')
+  return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')
+}
+
+async function adoptiumUrl(
+  major: number
+): Promise<{ url: string; name: string; sha256?: string; size?: number }> {
   const api =
     `https://api.adoptium.net/v3/assets/latest/${major}/hotspot` +
     `?architecture=x64&image_type=jre&os=windows&vendor=eclipse`
   const list = await fetchJson<AdoptiumAsset[]>(api)
   if (!list.length) throw new Error(`没有找到 Java ${major} 的 JRE`)
   const pkg = list[0].binary.package
-  return { url: pkg.link, name: pkg.name }
+  return { url: pkg.link, name: pkg.name, sha256: pkg.checksum, size: pkg.size }
 }
 
 export interface JavaResult {
@@ -67,7 +75,7 @@ export async function ensureJava(
   mkdirSync(dest, { recursive: true })
 
   onProgress?.('download', 0)
-  const { url, name } = await adoptiumUrl(major)
+  const { url, name, sha256: expected } = await adoptiumUrl(major)
   const zipPath = join(runtimeDir(), name)
   // 国内直连 GitHub 基本必挂（120 秒超时 ×3 次重试 = 6 分钟没反应），
   // 所以镜像放前面，GitHub 只作为最后的兜底且只试 1 次。

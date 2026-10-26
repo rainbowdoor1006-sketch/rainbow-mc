@@ -4,6 +4,7 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync, statSync, unlin
 import { dirname, join } from 'path'
 import { spawn } from 'child_process'
 import { paths, installRoot } from './paths'
+import { verifyManifest } from './minecraft/update'
 
 /** 版本号口径必须与服务端一致：MAJOR * 100 + MINOR * 10 + PATCH */
 export function versionCodeOf(version: string): number {
@@ -34,7 +35,9 @@ export function compareVersion(a: string, b: string): number {
   }
   return 0
 }
-export const UPDATE_ENDPOINT = ''
+// 测试 / 自建服务器可用环境变量覆盖（仅影响更新地址，不改变验签逻辑）
+export const UPDATE_ENDPOINT =
+  process.env['RM_UPDATE_ENDPOINT'] || 'https://rainbowdoor.icu/api/launcher/version'
 
 export interface LatestInfo {
   version: string
@@ -46,6 +49,8 @@ export interface LatestInfo {
   mandatory?: boolean
   minSupported?: string
   publishedAt?: string
+  /** 清单签名（base64，Ed25519），对 version/sha256/size/downloadUrl 计算 */
+  sig?: string
 }
 
 export type UpdateState = 'older' | 'same' | 'newer' | 'unknown'
@@ -75,7 +80,8 @@ function normalizeLatest(raw: Record<string, unknown> | undefined): LatestInfo |
     notes: raw.notes ? String(raw.notes) : undefined,
     mandatory: Boolean(raw.mandatory),
     minSupported: raw.minSupported ? String(raw.minSupported) : undefined,
-    publishedAt: raw.publishedAt ? String(raw.publishedAt) : undefined
+    publishedAt: raw.publishedAt ? String(raw.publishedAt) : undefined,
+    sig: raw.sig ? String(raw.sig) : undefined
   }
 }
 
@@ -101,6 +107,18 @@ export async function checkForUpdate(channel = 'stable'): Promise<CheckResult> {
     }
     const latest = normalizeLatest(data.latest as Record<string, unknown> | undefined)
     if (!latest) return { ok: false, state: 'unknown', local, channel, message: '版本信息不完整' }
+    // 先验签：清单由服务器返回，sha256 也在里面，同源就等于没有校验。
+    // 公钥内置在程序里，攻击者必须拿到私钥才能伪造，服务器被拿下也推不了恶意包。
+    const sigErr = verifyManifest({
+      version: latest.version,
+      sha256: latest.sha256,
+      size: latest.size,
+      downloadUrl: latest.downloadUrl,
+      sig: latest.sig
+    })
+    if (sigErr) {
+      return { ok: false, state: 'unknown', local, channel, message: sigErr }
+    }
     // 用语义化版本比较，而不是 versionCode：
     // code 的公式（MAJOR*100+MINOR*10+PATCH）在 0.3.0 这种场景会倒退，
     // 版本号本身比较永远单调，服务端换公式也不受影响。

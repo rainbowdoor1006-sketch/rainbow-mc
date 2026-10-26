@@ -17,34 +17,44 @@ const MAX_INPUT = 30 * 1024 * 1024
 
 /** 自定义协议：让渲染进程能安全加载本地图片（dev 的 http 页面也能用） */
 export function registerAppearanceProtocol(): void {
-  protocol.handle('rainbow', (request) => {
-    try {
-      const url = new URL(request.url)
-      const file = decodeURIComponent(url.pathname).replace(/^\/+/, '')
-      // 只允许读启动器自己的数据目录，避免变成任意文件读取
-      const root = paths.root().toLowerCase()
-      if (!file.toLowerCase().startsWith(root)) {
-        return new Response('forbidden', { status: 403 })
-      }
-      if (!existsSync(file)) return new Response('not found', { status: 404 })
-      const buf = readFileSync(file)
-      const ext = file.split('.').pop()?.toLowerCase() || 'png'
-      const mime =
-        ext === 'jpg' || ext === 'jpeg'
-          ? 'image/jpeg'
-          : ext === 'webp'
-            ? 'image/webp'
-            : ext === 'bmp'
-              ? 'image/bmp'
-              : 'image/png'
-      return new Response(new Uint8Array(buf), {
-        status: 200,
-        headers: { 'Content-Type': mime, 'Cache-Control': 'no-cache' }
-      })
-    } catch {
-      return new Response('bad request', { status: 400 })
+protocol.handle('rainbow', (request) => {
+  try {
+    const url = new URL(request.url)
+    const raw = decodeURIComponent(url.pathname).replace(/^\/+/, '')
+    const path = require('path') as typeof import('path')
+    const fs = require('fs') as typeof import('fs')
+    const root = path.resolve(paths.root())
+    // 关键：先 resolve 再判断，否则 data\\..\\.. 这种字符串仍以 data 开头，能绕过前缀检查
+    const resolved = path.resolve(raw)
+    const insideRoot = resolved === root || resolved.startsWith(root + path.sep)
+    // 允许 data 之外的「用户显式选择」的文件：自定义背景、账号头像
+    const allowed = new Set<string>()
+    const st = state()
+    const bg = st.settings.appearance?.backgroundFile
+    if (bg) allowed.add(path.resolve(bg))
+    for (const acc of st.accounts) if (acc.avatar) allowed.add(path.resolve(acc.avatar))
+    if (!insideRoot && !allowed.has(resolved)) {
+      return new Response('forbidden', { status: 403 })
     }
-  })
+    if (!fs.existsSync(resolved)) return new Response('not found', { status: 404 })
+    const buf = fs.readFileSync(resolved)
+    const ext = resolved.split('.').pop()?.toLowerCase() || 'png'
+    const mime =
+      ext === 'jpg' || ext === 'jpeg'
+        ? 'image/jpeg'
+        : ext === 'webp'
+          ? 'image/webp'
+          : ext === 'bmp'
+            ? 'image/bmp'
+            : 'image/png'
+    return new Response(new Uint8Array(buf), {
+      status: 200,
+      headers: { 'Content-Type': mime, 'Cache-Control': 'no-cache' }
+    })
+  } catch {
+    return new Response('bad request', { status: 400 })
+  }
+})
 }
 
 function bgPath(): string {

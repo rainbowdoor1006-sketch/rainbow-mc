@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
+import { createHash } from 'crypto'
 import { spawn } from 'child_process'
 import type { ComponentLoader } from '@shared/types'
 import { fetchJson } from './http'
@@ -364,11 +365,37 @@ function snapshotVersions(): Set<string> {
 }
 
 async function downloadInstaller(urls: string[], dest: string, label: string): Promise<void> {
+  let lastErr = ''
   for (const url of urls) {
-    const failed = await downloadAll([{ url, dest }], { concurrency: 1 })
-    if (!failed.length) return
+    try {
+      // 先取官方 .sha1（maven 都提供），拿不到就退化为「只校验 TLS」
+      let expected = ''
+      try {
+        const res = await fetch(`${url}.sha1`, { signal: AbortSignal.timeout(15000) })
+        if (res.ok) expected = (await res.text()).trim().split(/\s+/)[0].toLowerCase()
+      } catch {
+        /* sha1 取不到，继续 */
+      }
+      const failed = await downloadAll([{ url, dest }], { concurrency: 1 })
+      if (failed.length) continue
+      if (expected) {
+        const got = createHash('sha1').update(readFileSync(dest)).digest('hex').toLowerCase()
+        if (got !== expected) {
+          try {
+            rmSync(dest, { force: true })
+          } catch {
+            /* ignore */
+          }
+          lastErr = `${label}安装器校验失败（sha1 不匹配）`
+          continue
+        }
+      }
+      return
+    } catch (e) {
+      lastErr = e instanceof Error ? e.message : String(e)
+    }
   }
-  throw new Error(`${label}安装器下载失败（官方源与镜像都不可用）`)
+  throw new Error(`${label}安装器下载失败（${lastErr || '官方源与镜像都不可用'}）`)
 }
 
 /** 在 versions 目录里找已经装好的加载器版本（名字里同时含 mcVersion 和关键字） */

@@ -1,6 +1,6 @@
 {
   "name": "rainbow-mc",
-  "version": "0.2.68",
+  "version": "0.2.71",
   "description": "RAINBOW MC - 开源 Minecraft 启动器（Electron + React）",
   "main": "out/main/index.js",
   "author": "RAINBOW DOOR",

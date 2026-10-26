@@ -113,8 +113,23 @@ function registerIpc(): void {
     return true
   })
   ipcMain.handle('open:path', async (_e, p: string) => {
-    await shell.openPath(p)
-    return true
+    // 只允许 data 目录内：目录直接打开，文件用「在文件夹中显示」（不执行任何程序）
+    try {
+      const path = require('path') as typeof import('path')
+      const fs = require('fs') as typeof import('fs')
+      const root = path.resolve(paths.root())
+      const target = path.resolve(String(p || ''))
+      const inside = target === root || target.startsWith(root + path.sep)
+      if (!inside) return false
+      if (fs.existsSync(target) && fs.statSync(target).isFile()) {
+        shell.showItemInFolder(target)
+        return true
+      }
+      await shell.openPath(target)
+      return true
+    } catch {
+      return false
+    }
   })
 
   ipcMain.handle('win:minimize', () => mainWindow?.minimize())
