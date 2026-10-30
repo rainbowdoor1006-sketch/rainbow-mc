@@ -112,6 +112,17 @@ function registerIpc(): void {
     await shell.openPath(paths.logs())
     return true
   })
+  ipcMain.handle('open:url', async (_e, url: string) => {
+    // 只放行 https，防止被拼出 file:// 或自定义协议
+    try {
+      const u = new URL(String(url))
+      if (u.protocol !== 'https:') return false
+      await shell.openExternal(u.toString())
+      return true
+    } catch {
+      return false
+    }
+  })
   ipcMain.handle('open:path', async (_e, p: string) => {
     // 只允许 data 目录内：目录直接打开，文件用「在文件夹中显示」（不执行任何程序）
     try {

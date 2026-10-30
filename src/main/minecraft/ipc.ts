@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { execSync } from 'child_process'
-import { appendFileSync, mkdirSync, readdirSync, renameSync, rmSync } from 'fs'
+import { appendFileSync, mkdirSync, readdirSync, rmSync } from 'fs'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
@@ -168,56 +168,34 @@ function listGpus(): string[] {
 
 
 /**
- * 显卡类崩溃时自动做的兼容处理（尽量不让用户去点驱动设置）：
- * ① 把 javaw.exe 在高性能 GPU 偏好里登记（用户级注册表，不需要管理员）
- * ② 把渲染类模组（Embeddium/Sodium/Rubidium/Oculus/Iris）移到 mods.disabled，下次启动用原版渲染
+ * 显卡类崩溃后的「建议」，只写日志，绝不改动用户的模组与注册表。
+ *
+ * 历史教训（2026-10-29）：旧实现会在崩溃后自动把 Embeddium/Oculus 等渲染模组
+ * 移进 mods.disabled，并写 HKCU GPU 偏好。结果用户的整合包在没有任何确认的情况下
+ * 被改坏（启动报 embeddium 未安装、主界面背景变黑）。现在改成只给建议，
+ * 要不要动由用户在界面里自己决定。
  */
 function applyGpuCompatFix(projectDir: string, signature: string, logFile: string): string[] {
   const done: string[] = []
-  const instDir = join(paths.games(), projectDir)
-
   if (/NVIDIA|Intel|显卡|OpenGL/i.test(signature)) {
-    try {
-      const java = findRuntimeJava()
-      if (java) {
-        const key = 'HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences'
-        execSync(
-          `reg add "${key}" /v "${java}" /t REG_SZ /d "GpuPreference=2;" /f`,
-          { stdio: 'ignore', windowsHide: true, timeout: 5000 }
-        )
-        done.push('已把 javaw.exe 登记为「高性能 GPU」')
-      }
-    } catch {
-      /* 忽略 */
-    }
+    done.push('建议：把 javaw.exe 设为「高性能 GPU」（Windows 设置 → 显示 → 图形）')
   }
-
   if (/NVIDIA|OpenGL/i.test(signature)) {
-    const modsDir = join(instDir, 'mods')
-    const disabledDir = join(instDir, 'mods.disabled')
-    try {
-      mkdirSync(disabledDir, { recursive: true })
-      const targets = readdirSync(modsDir).filter((f: string) =>
-        /^(embeddium|sodium|rubidium|oculus|iris|sodium-extra|embeddium-extra).*\.jar$/i.test(f)
-      )
-      for (const f of targets) {
-        renameSync(join(modsDir, f), join(disabledDir, f))
-      }
-      if (targets.length) done.push(`已临时禁用渲染优化模组：${targets.join('、')}（在 mods.disabled 里）`)
-    } catch {
-      /* 忽略 */
-    }
+    done.push('建议：若反复在加载画面崩溃，可临时把 mods 里的 Embeddium/Oculus 移到 mods.disabled（需你手动操作）')
   }
-
   if (done.length) {
     try {
-      appendFileSync(logFile, '\n=== 自动兼容处理 ===\n' + done.map((d) => '· ' + d).join('\n') + '\n')
+      appendFileSync(
+        logFile,
+        '\n=== 兼容建议（未自动执行）===\n' + done.map((d) => '· ' + d).join('\n') + '\n'
+      )
     } catch {
       /* 忽略 */
     }
   }
   return done
 }
+
 
 /** 找到启动器使用的 javaw.exe（优先自带 runtime） */
 function findRuntimeJava(): string | null {
@@ -297,7 +275,11 @@ function diagnoseCrash(logFile: string): string | undefined {
   }
   return undefined
 }
+import { registerMemoryIpc } from './memory'
+
 export function registerMinecraftIpc(getWindow: () => BrowserWindow | null): void {
+  registerMemoryIpc(ipcMain)
+
   // 组件库需要知道当前有哪些项目，才能算「这个组件被哪些项目用了」
   initLibrary(() => state().projects)
   const emit = (channel: string, payload: unknown): void => {

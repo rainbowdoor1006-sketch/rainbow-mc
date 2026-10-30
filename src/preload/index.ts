@@ -16,6 +16,7 @@ const api = {
     ipcRenderer.invoke('app:setActive', patch),
   openLogs: (): Promise<boolean> => ipcRenderer.invoke('open:logs'),
   openPath: (p: string): Promise<boolean> => ipcRenderer.invoke('open:path', p),
+  openUrl: (url: string): Promise<boolean> => ipcRenderer.invoke('open:url', url),
   mc: {
     manifest: (force?: boolean): Promise<{ latest: { release: string; snapshot: string }; versions: VersionSummary[] }> =>
       ipcRenderer.invoke('mc:manifest', force),
@@ -179,6 +180,27 @@ const api = {
       blocked?: boolean
       message?: string
     }> => ipcRenderer.invoke('net:relaunchAdmin')
+  },
+  mem: {
+    stats: (): Promise<{
+      selfWorkingSetMB: number
+      availableMB: number
+      totalMB: number
+      usedPct: number
+      childCount: number
+    }> => ipcRenderer.invoke('mem:stats'),
+    optimize: (level?: 'own' | 'safe' | 'aggressive'): Promise<{
+      ok: boolean
+      level: 'own' | 'safe' | 'aggressive'
+      message: string
+      before: { selfWorkingSetMB: number; availableMB: number; totalMB: number; usedPct: number }
+      after: { selfWorkingSetMB: number; availableMB: number; totalMB: number; usedPct: number }
+      freedMB: number
+      droppedPct: number
+      trimmed: number
+      clearedFiles: number
+      standbyCleared: boolean
+    }> => ipcRenderer.invoke('mem:optimize', level)
   },
   console: {
     list: (): Promise<{ name: string; group: string; usage: string; desc: string }[]> =>
